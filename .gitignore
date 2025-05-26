@@ -1,0 +1,4 @@
+*.pyc
+wandb/
+datasets/
+runs/
