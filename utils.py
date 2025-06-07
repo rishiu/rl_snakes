@@ -1,7 +1,52 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 def ma(arr, idx):
     return arr[idx % len(arr)]
+
+def calculate_normals(points):
+    point_centroid = np.mean(points, axis=1)
+
+    shifted_pts = np.roll(points, 1, axis=1)
+    segment_dir = shifted_pts - points
+
+    centroid_vec = point_centroid[:, np.newaxis] - points
+
+    opt_one = np.stack((-segment_dir[1,:], segment_dir[0,:]), axis=0)
+
+    opt_two = np.stack((segment_dir[1,:], -segment_dir[0,:]), axis=0)
+
+    opt_one_dot = np.sum(opt_one * centroid_vec, axis=0) < 0
+    opt_two_dot = np.sum(opt_two * centroid_vec, axis=0) < 0
+
+    segment_normals = opt_one_dot * opt_one + opt_two_dot * opt_two
+
+    shifted_normals = np.roll(segment_normals, -1, axis=1)
+    vertex_normals = (segment_normals + shifted_normals) / 2
+
+    segment_midpoints = (points + shifted_pts) / 2.0
+
+    epsilon = 1e-8  # Small number to handle near-zero magnitudes safely
+
+    seg_norm_magnitudes = np.linalg.norm(segment_normals, axis=0, keepdims=True)
+    
+    is_seg_norm_effectively_zero = seg_norm_magnitudes < epsilon
+    
+    safe_seg_norm_magnitudes = np.where(is_seg_norm_effectively_zero, 1.0, seg_norm_magnitudes)
+    plot_segment_normal_directions = segment_normals / safe_seg_norm_magnitudes
+    
+    plot_segment_normal_directions[0, is_seg_norm_effectively_zero[0,:]] = 0.0
+    plot_segment_normal_directions[1, is_seg_norm_effectively_zero[0,:]] = 0.0
+
+    vert_norm_magnitudes = np.linalg.norm(vertex_normals, axis=0, keepdims=True)
+    is_vert_norm_effectively_zero = vert_norm_magnitudes < epsilon
+    safe_vert_norm_magnitudes = np.where(is_vert_norm_effectively_zero, 1.0, vert_norm_magnitudes)
+    
+    plot_vertex_normal_directions = vertex_normals / safe_vert_norm_magnitudes
+    plot_vertex_normal_directions[0, is_vert_norm_effectively_zero[0,:]] = 0.0
+    plot_vertex_normal_directions[1, is_vert_norm_effectively_zero[0,:]] = 0.0
+
+    return plot_vertex_normal_directions, plot_segment_normal_directions
 
 def bilinear_interpolate(image, points):
     if image.ndim != 2:

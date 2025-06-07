@@ -14,6 +14,55 @@ def create_circular_mask(height, width, center_x=None, center_y=None, radius=Non
     mask = dist_from_center_sq <= radius**2
     return mask.astype(np.uint8) * 255
 
+def create_centered_rectangular_mask(height, width, rect_height=None, rect_width=None):
+    """
+    Creates a mask with a centered rectangle.
+
+    Args:
+        height (int): Height of the mask.
+        width (int): Width of the mask.
+        rect_height (int, optional): Height of the rectangle. 
+                                     Defaults to height // 2.
+        rect_width (int, optional): Width of the rectangle. 
+                                    Defaults to width // 2.
+
+    Returns:
+        np.ndarray: The generated mask with a centered rectangle (dtype=np.uint8),
+                    where the rectangle is 255 and the background is 0.
+    """
+    if rect_height is None:
+        rect_height = height // 2
+    if rect_width is None:
+        rect_width = width // 2
+
+    # Initialize the mask with zeros
+    mask = np.zeros((height, width), dtype=np.uint8)
+
+    # Calculate the top-left corner of the rectangle
+    # Integer division ensures that if the rectangle cannot be perfectly centered,
+    # it is shifted towards the top-left.
+    start_x = (width - rect_width) // 2
+    start_y = (height - rect_height) // 2
+
+    # Calculate the bottom-right corner (exclusive for slicing)
+    end_x = start_x + rect_width
+    end_y = start_y + rect_height
+
+    # Ensure the rectangle coordinates are within the mask boundaries
+    # This handles cases where rect_height/rect_width might be larger than
+    # the mask dimensions, or negative (though they should be positive).
+    actual_start_y = max(0, start_y)
+    actual_end_y = min(height, end_y)
+    actual_start_x = max(0, start_x)
+    actual_end_x = min(width, end_x)
+
+    # Set the rectangle area to 255 if the slice is valid
+    if actual_start_x < actual_end_x and actual_start_y < actual_end_y:
+        mask[actual_start_y:actual_end_y, actual_start_x:actual_end_x] = 255
+    
+    return mask
+
+
 def create_multi_circle_mask(height, width, num_circles, radius_range):
     """Generates a mask with multiple randomly placed circles.
 
