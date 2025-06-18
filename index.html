@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Data-Driven Active Snakes with Reinforcement Learning</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			line-height: 1.6;
+			margin: 20px;
+			max-width: 900px;
+			margin-left: auto;
+			margin-right: auto;
+			background-color: #f4f4f4;
+			color: #333;
+		}
+
+		h1,
+		h2,
+		h3 {
+			color: #0056b3;
+		}
+
+		.container {
+			background-color: #fff;
+			padding: 30px;
+			border-radius: 8px;
+			box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+		}
+
+		.section {
+			margin-bottom: 20px;
+		}
+
+		.members {
+			font-weight: bold;
+		}
+
+		.abstract {
+			background-color: #e9f7ff;
+			border-left: 5px solid #0056b3;
+			padding: 15px;
+			margin-top: 15px;
+			margin-bottom: 15px;
+			border-radius: 4px;
+		}
+
+		.image-gallery {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 15px;
+			margin-top: 15px;
+			justify-content: center;
+		}
+
+		.image-gallery img {
+			max-width: 100%;
+			height: auto;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+		}
+
+		.image-gallery figure {
+			margin: 0;
+			text-align: center;
+			flex: 1 1 calc(50% - 15px);
+			/* Two columns on larger screens */
+			max-width: calc(50% - 15px);
+			box-sizing: border-box;
+		}
+
+		.image-gallery figcaption {
+			font-style: italic;
+			font-size: 0.9em;
+			margin-top: 5px;
+			color: #666;
+		}
+
+		.links a {
+			color: #0056b3;
+			text-decoration: none;
+		}
+
+		.links a:hover {
+			text-decoration: underline;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<header>
+			<h1>Data-Driven Active Snakes with Reinforcement Learning</h1>
+			<p class="members">Group Members: Rishi Upadhyay, Eshanika Ray, Nikhil Isukapalli, Jakob Reinwald</p>
+		</header>
+
+		<section class="section abstract">
+			<h2>Abstract</h2>
+			<p>
+				Automated image segmentation is crucial in various applications, including medical imaging. Traditional active
+				contour models, or "snakes," are powerful tools for image segmentation that evolve contours towards object
+				boundaries by minimizing an energy function. However, classical snakes often suffer from limitations such as
+				local minima traps, initialization sensitivity, and tedious manual parameter tuning. While deep learning has
+				significantly advanced computer vision, it typically requires large, manually annotated datasets, which are
+				time-intensive and intricate to create, especially in medical contexts.
+			</p>
+			<p>
+				This project proposes a novel approach to address these limitations by developing an active snake controlled by
+				a neural network trained using Reinforcement Learning (RL). This data-driven approach aims to move beyond fixed,
+				hand-crafted energy functions and enable the snake to learn adaptive, context-aware deformation strategies. By
+				leveraging RL, the agent can learn to escape local minima and exhibit more complex behaviors that are difficult
+				to encode with traditional energy functions. The neural network controller will output offsets for snake points,
+				and traditional snake energy functions will be utilized to provide reward signals, encouraging smooth shapes and
+				alignment with important features. We also explore imitation learning, training our RL snake to emulate a
+				traditional snake to accelerate basic movement learning. This framework has the potential to provide more robust
+				and intuitive segmentation tools that can leverage global image context in addition to local features. We intend
+				to apply these techniques to instance segmentation tasks on traditional images, with potential extensions to
+				medical images.
+			</p>
+		</section>
+
+		<section class="section links">
+			<ul>
+				<li><a href="project_report.pdf" target="_blank">Final Project Report (PDF)</a></li>
+				<!-- <li><a href="video_demos/demo_video_1.mp4" target="_blank">Video Demo 1 (Placeholder)</a></li> -->
+				<li><a href="https://github.com/rishiu/rl_snakes" target="_blank">Project Source Code (GitHub)</a></li>
+				<!-- <li><a href="code/executable_name" target="_blank">Executable</a></li> -->
+			</ul>
+		</section>
+
+		<section class="section">
+			<div class="image-gallery">
+				<figure>
+					<img src="images/snake_initial.png" alt="Initial Snake Contour">
+					<figcaption>Figure 1: Initial snake contour on a test image.</figcaption>
+				</figure>
+				<figure>
+					<img src="images/snake_final.png" alt="Final Snake Segmentation">
+					<figcaption>Figure 2: Final snake segmentation after RL-driven evolution.</figcaption>
+				</figure>
+			</div>
+		</section>
+
+		<footer>
+			<p>&copy; 2025 Rishi Upadhyay, Eshanika Ray, Nikhil Isukapalli, Jakob Reinwald</p>
+		</footer>
+	</div>
+</body>
+
+</html>

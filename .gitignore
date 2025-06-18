@@ -2,3 +2,4 @@
 wandb/
 datasets/
 runs/
+venv/
