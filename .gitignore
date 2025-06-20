@@ -3,3 +3,4 @@ wandb/
 runs/
 venv/
 images/
+webpage/.DS_Store
