@@ -119,7 +119,7 @@ class BCTrainer:
             ]
         elif self.model_type == "cnn":
             # For CNN model, state_dim is interpreted as vector_input_dim
-            from ppo_trainer import CNNActorCritic
+            from src.rl_train_algorithm.ppo_trainer import CNNActorCritic
 
             self.policy = CNNActorCritic(
                 vector_input_dim=state_dim,

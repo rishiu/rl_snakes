@@ -1,6 +1,6 @@
 import numpy as np
 from skimage.filters import sobel_h, sobel_v, gaussian
-from code.utils import bilinear_interpolate
+from src.utils import bilinear_interpolate
 
 
 class GradientExternalEnergy:

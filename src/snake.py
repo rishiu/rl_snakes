@@ -1,6 +1,6 @@
 import numpy as np
 from tqdm import tqdm
-from code.utils import ma
+from src.utils import ma
 
 
 class Snake:

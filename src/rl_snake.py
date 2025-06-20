@@ -4,32 +4,28 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
-from code.gradient_energy import GradientExternalEnergy
+from src.gradient_energy import GradientExternalEnergy
 
-# from data_utils import build_dataset_setting_fn
-from code.utils import (
-    ma,
-    create_circle_points,
-    create_ellipse_points,
+from src.utils import (
     bilinear_interpolate,
     calculate_normals,
 )
-from code.visualization import (
-    visualize_snake_evolution,
-    visualize_gradient_fields,
+from src.visualization import (
     plot_snake_on_image,
     visualize_snake_evolution_with_energy_rewards,
 )
-from code.mask_utils import (
+from src.mask_utils import (
     create_multi_circle_mask,
-    create_centered_rectangular_mask,
+    create_rectangular_mask,
     create_circular_mask,
     create_triangle_mask,
     create_star_mask,
     create_elliptical_mask,
 )
-from RL.ppo_trainer import PPOTrainer
-from RL.bc_trainer import BCTrainer
+
+from src.snake import Snake
+from src.rl_train_algorithm.ppo_trainer import PPOTrainer
+from src.rl_train_algorithm.bc_trainer import BCTrainer
 import os
 import wandb
 import matplotlib.pyplot as plt
@@ -51,6 +47,7 @@ class RLSnake:
         model_type="mlp",
         image_channels=1,
         obs_type="trad",
+        trainer_algorithm="bc",
     ):
         self.num_control_points = initial_points.shape[1]
         self.alpha = alpha
@@ -67,18 +64,19 @@ class RLSnake:
         self.model_type = model_type
         self.image_channels = image_channels
         self.obs_type = obs_type
+        self.trainer_algorithm = trainer_algorithm
 
         os.makedirs(f"runs/{run_name}/models", exist_ok=True)
         self.run = wandb.init(
             project="RLSnake",
             name=run_name,
             config={
-                "alpha": alpha,
-                "beta": beta,
-                "gamma": gamma,
-                "update_freq": update_freq,
-                "save_freq": save_freq,
-                "run_name": run_name,
+                "alpha": self.alpha,
+                "beta": self.beta,
+                "gamma": self.gamma,
+                "update_freq": self.update_freq,
+                "save_freq": self.save_freq,
+                "run_name": self.run_name,
                 "num_control_points": self.num_control_points,
                 "model_type": self.model_type,
             },
@@ -89,45 +87,53 @@ class RLSnake:
         )  # self.get_obs(self.obs_type).shape[0]
         self.output_dim = self.num_control_points * 2
 
-        self.trainer = PPOTrainer(
-            self.vector_input_dim,
-            self.output_dim,
-            actor_lr=5e-5,
-            critic_lr=5e-5,
-            gamma=0.99,
-            K_epochs=self.update_freq,
-            eps_clip=0.2,
-            action_std_init=0.1,
-            model_type=self.model_type,
-            image_channels=self.image_channels,
-        )
-
-        # self.trainer = BCTrainer(self.vector_input_dim, self.output_dim, \
-        #                          actor_lr=5e-5, critic_lr=5e-5, \
-        #                          gamma=0.99, K_epochs=self.update_freq, eps_clip=0.2, \
-        #                          action_std_init=0.1,
-        #                          model_type=self.model_type,
-        #                          image_channels=self.image_channels)
-
-        A = Snake.setup_A(self.num_control_points, 0.05, 0.1)
-        A_ = A + 1.0 * np.eye(self.num_control_points)
-
-        def gt_action_fn(obs):
-            snake_points = np.array(
-                obs[0, : self.num_control_points * 2].reshape(2, -1)
+        if self.trainer_algorithm == "ppo":
+            self.trainer = PPOTrainer(
+                self.vector_input_dim,
+                self.output_dim,
+                actor_lr=5e-5,
+                critic_lr=5e-5,
+                gamma=0.99,
+                K_epochs=self.update_freq,
+                eps_clip=0.2,
+                action_std_init=0.1,
+                model_type=self.model_type,
+                image_channels=self.image_channels,
+            )
+        elif self.trainer_algorithm == "bc":
+            self.trainer = BCTrainer(
+                self.vector_input_dim,
+                self.output_dim,
+                actor_lr=5e-5,
+                critic_lr=5e-5,
+                gamma=0.99,
+                K_epochs=self.update_freq,
+                eps_clip=0.2,
+                action_std_init=0.1,
+                model_type=self.model_type,
+                image_channels=self.image_channels,
             )
 
-            f_x, f_y = self.ext_energy(snake_points)
-            dext = np.array([f_x, f_y])
+            def gt_action_fn(obs):
+                snake_points = np.array(
+                    obs[0, : self.num_control_points * 2].reshape(2, -1)
+                )
 
-            y = 1.0 * snake_points - dext
+                f_x, f_y = self.ext_energy(snake_points)
+                dext = np.array([f_x, f_y])
 
-            new_snake_points = np.zeros_like(snake_points)
-            new_snake_points[0, :] = np.linalg.solve(A_, y[0, :])
-            new_snake_points[1, :] = np.linalg.solve(A_, y[1, :])
-            return new_snake_points - snake_points
+                y = 1.0 * snake_points - dext
 
-        # self.trainer.set_gt_action_fn(gt_action_fn)
+                new_snake_points = np.zeros_like(snake_points)
+                A = Snake.setup_A(self.num_control_points, 0.05, 0.1)
+                A_ = A + 1.0 * np.eye(self.num_control_points)
+                new_snake_points[0, :] = np.linalg.solve(A_, y[0, :])
+                new_snake_points[1, :] = np.linalg.solve(A_, y[1, :])
+                return new_snake_points - snake_points
+
+            self.trainer.set_gt_action_fn(gt_action_fn)
+        else:
+            raise ValueError(f"Unsupported trainer_algorithm: {self.trainer_algorithm}")
 
     def compute_internal_energy(self):
         temp_points = self.current_points.copy()
@@ -231,6 +237,10 @@ class RLSnake:
         wandb.log({"img": wandb.Image(img)}, step=setting_idx)
 
         self.curr_img = img
+
+        def external_energy_fn(img):
+            return GradientExternalEnergy(img)
+
         self.ext_energy = external_energy_fn(img)
 
         rewards = []
@@ -330,7 +340,7 @@ class RLSnake:
                 bc_loss = self.trainer.update(self.last_value)
                 wandb.log({"bc_loss": bc_loss}, step=i)
             if i % self.save_freq == 0:
-                self.trainer.save(f"runs/{self.run_name}/models/snake_model_{i}.pth")
+                self.trainer.save(f"runs/{self.run_name}/models/rl_snake_model_{i}.pth")
                 table = wandb.Table(
                     data=[
                         [j, avg_rewards_by_time[j] / self.update_freq]
@@ -395,6 +405,10 @@ class RLSnake:
             # Get new setting
             img, gt_points = eval_setting_fn()
             self.curr_img = img
+
+            def external_energy_fn(img):
+                return GradientExternalEnergy(img)
+
             self.ext_energy = external_energy_fn(img)
 
             episode_reward = 0

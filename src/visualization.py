@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.widgets import Slider
-from code.utils import calculate_normals
+from src.utils import calculate_normals
 
 
 def plot_snake_on_image(image, snake_points, title="Snake on Image", normal_scale=5.0):

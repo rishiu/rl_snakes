@@ -1,4 +1,4 @@
-from code.mask_utils import (
+from src.mask_utils import (
     create_circular_mask,
     create_rectangular_mask,
     create_triangle_mask,
@@ -8,7 +8,7 @@ from code.mask_utils import (
 )
 
 
-def get_image_setting_functions(img_height, img_width, exclude=None):
+def get_image_setting_functions(img_height, img_width, exclude=[]):
     """
     Returns a dictionary of image setting functions for various shapes.
     Each function takes no arguments and returns (img, None).
