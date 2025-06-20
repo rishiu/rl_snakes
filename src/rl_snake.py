@@ -1,8 +1,6 @@
 import numpy as np
 from PIL import Image
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from tqdm import tqdm
 from src.gradient_energy import GradientExternalEnergy
 
@@ -26,6 +24,7 @@ from src.mask_utils import (
 from src.snake import Snake
 from src.rl_train_algorithm.ppo_trainer import PPOTrainer
 from src.rl_train_algorithm.bc_trainer import BCTrainer
+from src.images import get_image_setting_functions
 import os
 import wandb
 import matplotlib.pyplot as plt
@@ -470,24 +469,20 @@ class RLSnake:
             external_energies.extend(external_energy_episode)
 
             # Generate final snake image (for the last episode or if only 1 episode)
-            snake_fig = plot_snake_on_image(self.curr_img, self.current_points)
             if episode == num_episodes - 1:  # Save the final episode's image
+                snake_fig = plot_snake_on_image(self.curr_img, self.current_points)
                 final_snake_image = snake_fig
 
-            if log_to_wandb:
-                wandb.log(
-                    {
-                        "eval_snake": snake_fig,
-                        "eval_episode_reward": episode_reward,
-                        "eval_final_reward": reward,
-                        "eval_episode_length": step_count,
-                    },
-                    step=episode,
-                )
-
-            # Only close the figure if it's not the final one we want to return
-            if episode != num_episodes - 1:
-                plt.close(snake_fig)
+                if log_to_wandb:
+                    wandb.log(
+                        {
+                            "eval_snake": snake_fig,
+                            "eval_episode_reward": episode_reward,
+                            "eval_final_reward": reward,
+                            "eval_episode_length": step_count,
+                        },
+                        step=episode,
+                    )
 
         # Calculate evaluation metrics
         eval_metrics = {
@@ -557,79 +552,7 @@ class RLSnake:
         # Define all setting functions
         img_height, img_width = 200, 200
 
-        def rect_setting_fn():
-            img = create_centered_rectangular_mask(
-                img_height,
-                img_width,
-                rect_height=img_height // 4,
-                rect_width=img_width // 4,
-            )
-            return img, None
-
-        def circle_setting_fn():
-            img = create_circular_mask(img_height, img_width, radius=img_width // 4)
-            return img, None
-
-        def multicircle_setting_fn():
-            img = create_multi_circle_mask(
-                img_height, img_width, num_circles=5, radius_range=(10, 25)
-            )
-            return img, None
-
-        def triangle_setting_fn():
-            img = create_triangle_mask(
-                img_height,
-                img_width,
-                center_x=img_width // 2,
-                center_y=img_height // 2,
-                base=img_width // 3,
-                triangle_height=img_height // 3,
-                orientation="up",
-            )
-            return img, None
-
-        def star_setting_fn():
-            img = create_star_mask(
-                img_height,
-                img_width,
-                center_x=img_width // 2,
-                center_y=img_height // 2,
-                outer_radius=img_width // 4,
-                inner_radius=img_width // 8,
-                num_points=5,
-            )
-            return img, None
-
-        def ellipse_setting_fn():
-            img = create_elliptical_mask(
-                img_height,
-                img_width,
-                center_x=img_width // 2,
-                center_y=img_height // 2,
-                radius_x=img_width // 3,
-                radius_y=img_height // 4,
-                rotation_angle_rad=0,
-            )
-            return img, None
-
-        def test_eagle_image():
-            img = np.array(Image.open("test_images/eagle.jpeg").convert("L"))
-            return img, None
-
-        # Dictionary of setting functions
-        setting_functions = {
-            "rectangle": rect_setting_fn,
-            "circle": circle_setting_fn,
-            "multicircle": multicircle_setting_fn,
-            "triangle": triangle_setting_fn,
-            "star": star_setting_fn,
-            "ellipse": ellipse_setting_fn,
-            "eagle": test_eagle_image,
-        }
-
-        print(f"Evaluating checkpoint: {checkpoint_path}")
-        print(f"Testing on {len(setting_functions)} different settings...")
-        print(f"Results will be saved to: {output_dir}/")
+        rl_shapes_fn_dict = get_image_setting_functions(img_height, img_width)
 
         # Store results
         all_results = {}
@@ -639,9 +562,7 @@ class RLSnake:
         self.trainer.load(checkpoint_path)
 
         # Evaluate on each setting
-        for setting_name, setting_fn in setting_functions.items():
-            print(f"\nEvaluating on {setting_name} setting...")
-
+        for setting_name, setting_fn in rl_shapes_fn_dict.items():
             try:
                 # Run evaluation
                 eval_metrics, final_snake_image = self.evaluate(
@@ -708,5 +629,4 @@ class RLSnake:
                     ]["mean_episode_length"]
             wandb.log(summary_metrics)
 
-        print(f"\nAll evaluation images saved to: {output_dir}/")
         return all_results

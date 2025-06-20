@@ -50,32 +50,88 @@
 		.image-gallery {
 			display: flex;
 			flex-wrap: wrap;
-			gap: 15px;
+			/* Increased gap for more breathing room */
+			gap: 25px;
+			/* Changed from 15px */
 			margin-top: 15px;
 			justify-content: center;
+			align-items: flex-start;
+			/* Align items to the top if they have different heights */
 		}
 
 		.image-gallery img {
 			max-width: 100%;
 			height: auto;
+			/* Ensure image fits within its container, possibly adding blank space */
+			object-fit: contain;
+			/* Provide a consistent aspect ratio if images vary greatly in size */
+			aspect-ratio: 16 / 9;
+			/* Common for plots, adjust as needed (e.g., 1/1 for square images) */
 			border: 1px solid #ddd;
 			border-radius: 4px;
 		}
 
 		.image-gallery figure {
 			margin: 0;
+			padding: 10px;
+			/* Added padding inside figure for better spacing to shadow */
 			text-align: center;
-			flex: 1 1 calc(50% - 15px);
-			/* Two columns on larger screens */
-			max-width: calc(50% - 15px);
+			background-color: #fff;
+			/* Ensure background is white for shadow contrast */
+			border-radius: 8px;
+			/* Match container border-radius */
+			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+			/* Added box-shadow for a pronounced 'box' effect */
+			flex: 1 1 calc(50% - 25px);
+			/* Adjusted flex basis for new gap */
+			max-width: calc(50% - 25px);
+			/* Adjusted max-width for new gap */
 			box-sizing: border-box;
+			display: flex;
+			/* Make figure a flex container to center img/caption */
+			flex-direction: column;
+			align-items: center;
+			justify-content: space-between;
+			/* Push caption to bottom, image to top */
+		}
+
+		.image-gallery figure img {
+			/* Override img styling for consistency within figure */
+			flex-grow: 1;
+			/* Allow image to take available height */
+			max-height: 250px;
+			/* Constrain image height if aspect ratio is 16/9, adjust as needed */
 		}
 
 		.image-gallery figcaption {
 			font-style: italic;
 			font-size: 0.9em;
-			margin-top: 5px;
+			margin-top: 10px;
+			/* Increased margin for caption */
 			color: #666;
+			width: 100%;
+			/* Ensure caption spans full width of figure */
+		}
+
+		/* Styles for grouping images */
+		.image-group-header {
+			flex-basis: 100%;
+			/* Make header span full width */
+			text-align: center;
+			margin-top: 20px;
+			margin-bottom: 10px;
+			color: #0056b3;
+		}
+
+		.image-group {
+			display: flex;
+			flex-wrap: wrap;
+			gap: inherit;
+			/* Inherit gap from parent .image-gallery */
+			justify-content: center;
+			flex-basis: 100%;
+			/* Make group span full width */
+			margin-bottom: 20px;
 		}
 
 		.links a {
@@ -122,26 +178,56 @@
 		</section>
 
 		<section class="section links">
+			<h2>Project Links</h2>
 			<ul>
 				<li><a href="https://github.com/rishiu/rl_snakes/blob/main/project_report.pdf" target="_blank">Final Project
 						Report (PDF)</a></li>
-				<!-- <li><a href="video_demos/demo_video_1.mp4" target="_blank">Video Demo 1 (Placeholder)</a></li> -->
 				<li><a href="https://github.com/rishiu/rl_snakes" target="_blank">Project Source Code (GitHub)</a></li>
-				<!-- <li><a href="code/executable_name" target="_blank">Executable</a></li> -->
 			</ul>
 		</section>
 
 		<section class="section">
 			<div class="image-gallery">
-				<figure>
-					<img src="images/snake_initial.png" alt="Initial Snake Contour">
-					<figcaption>Figure 1: Initial snake contour on a test image.</figcaption>
-				</figure>
-				<figure>
-					<img src="images/snake_final.png" alt="Final Snake Segmentation">
-					<figcaption>Figure 2: Final snake segmentation after RL-driven evolution.</figcaption>
-				</figure>
-			</div>
+				<div class="image-group">
+					<figure>
+						<img src="sample_output.png" alt="Sample RL-Snake Output on Multi-circles">
+						<figcaption>Figure 1: A sample output of RL-snake segmentation on randomized multi-circles.</figcaption>
+					</figure>
+					<div />
+					<div class="image-group">
+						<figure>
+							<img src="initial_circle.png" alt="Initial Snake Contour on Circle">
+							<figcaption>Figure 2: Initial snake contour on a circle mask.</figcaption>
+						</figure>
+						<figure>
+							<img src="classical_circle_final.png" alt="Initial Snake Contour on Circle">
+							<figcaption>Figure 3: Classical snake final segmentation on circle.</figcaption>
+						</figure>
+						<figure>
+							<img src="mlp_bc_circle_initial.png" alt="Classical Snake Initial Position (Circle)">
+							<figcaption>Figure 4: Early snake position for RL-Snake on circle.</figcaption>
+						</figure>
+						<figure>
+							<img src="mlp_bc_circle_final.png" alt="Classical Snake Final Segmentation (Circle)">
+							<figcaption>Figure 5: Final snake segmentation for RL-Snake on circle.</figcaption>
+						</figure>
+					</div>
+					<div class="image-group">
+						<figure>
+							<img src="mlp_bc_circle_bc_loss.png" alt="MLP BC Circle BC Loss Plot">
+							<figcaption>Figure 6: Behavioral Cloning Loss for MLP BC model on circle.</figcaption>
+						</figure>
+						<figure>
+							<img src="mlp_bc_circle_reward.png" alt="MLP BC Circle Reward Plot">
+							<figcaption>Figure 7: Reward progression for MLP BC model on circle.</figcaption>
+						</figure>
+						<figure>
+							<img src="mlp_bc_circle_final_reward.png" alt="MLP BC Circle Final Reward Plot">
+							<figcaption>Figure 8: Final reward per episode for MLP BC model on circle.</figcaption>
+						</figure>
+					</div>
+
+				</div>
 		</section>
 
 		<footer>
