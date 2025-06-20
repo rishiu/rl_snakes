@@ -63,19 +63,19 @@ class RLSnake:
         self.vector_input_dim = self.num_control_points * 2 + (32*32)#self.get_obs(self.obs_type).shape[0]
         self.output_dim = self.num_control_points * 2
 
-        # self.trainer = PPOTrainer(self.vector_input_dim, self.output_dim, \
-        #                           actor_lr=5e-5, critic_lr=5e-5, \
-        #                           gamma=0.99, K_epochs=self.update_freq, eps_clip=0.2, \
-        #                           action_std_init=0.1,
-        #                           model_type=self.model_type,
-        #                           image_channels=self.image_channels)
+        self.trainer = PPOTrainer(self.vector_input_dim, self.output_dim, \
+                                  actor_lr=5e-5, critic_lr=5e-5, \
+                                  gamma=0.99, K_epochs=self.update_freq, eps_clip=0.2, \
+                                  action_std_init=0.1,
+                                  model_type=self.model_type,
+                                  image_channels=self.image_channels)
 
-        self.trainer = BCTrainer(self.vector_input_dim, self.output_dim, \
-                                 actor_lr=5e-5, critic_lr=5e-5, \
-                                 gamma=0.99, K_epochs=self.update_freq, eps_clip=0.2, \
-                                 action_std_init=0.1,
-                                 model_type=self.model_type,
-                                 image_channels=self.image_channels)
+        # self.trainer = BCTrainer(self.vector_input_dim, self.output_dim, \
+        #                          actor_lr=5e-5, critic_lr=5e-5, \
+        #                          gamma=0.99, K_epochs=self.update_freq, eps_clip=0.2, \
+        #                          action_std_init=0.1,
+        #                          model_type=self.model_type,
+        #                          image_channels=self.image_channels)
         
         A = Snake.setup_A(self.num_control_points, 0.05, 0.1)
         A_ = A + 1.0 * np.eye(self.num_control_points)
@@ -94,7 +94,7 @@ class RLSnake:
 
             return new_snake_points - snake_points
         
-        self.trainer.set_gt_action_fn(gt_action_fn)
+        # self.trainer.set_gt_action_fn(gt_action_fn)
 
     def compute_internal_energy(self):
         temp_points = self.current_points.copy()
@@ -407,7 +407,7 @@ class RLSnake:
         
         return eval_metrics, final_snake_image
 
-    def evaluate_on_all_settings(self, checkpoint_path, output_dir="output", num_steps=200, log_to_wandb=False):
+    def evaluate_on_all_settings(self, checkpoint_path, output_dir="output_ppo", num_steps=200, log_to_wandb=False):
         """
         Evaluate the trained model on all available setting functions and save results.
         
@@ -476,6 +476,10 @@ class RLSnake:
             )
             return img, None
         
+        def test_eagle_image():
+            img = np.array(Image.open("test_images/eagle.jpeg").convert('L'))
+            return img, None
+        
         # Dictionary of setting functions
         setting_functions = {
             "rectangle": rect_setting_fn,
@@ -483,7 +487,8 @@ class RLSnake:
             "multicircle": multicircle_setting_fn,
             "triangle": triangle_setting_fn,
             "star": star_setting_fn,
-            "ellipse": ellipse_setting_fn
+            "ellipse": ellipse_setting_fn,
+            "eagle": test_eagle_image
         }
         
         print(f"Evaluating checkpoint: {checkpoint_path}")
@@ -661,8 +666,13 @@ def ellipse_setting_fn():
     )
     return img, None
 
+def test_eagle_image():
+    img = np.array(Image.open("test_images/eagle.jpeg").convert('L'))
+    return img, None
+
 if __name__ == "__main__":
-    img_height, img_width = 200, 200
+    img = np.array(Image.open("test_images/eagle.jpeg").convert('L'))
+    img_height, img_width = img.shape
     num_snake_points = 30
     initial_snake = create_circle_points(num_snake_points, 
                                          center_x=img_width//2, 
@@ -674,8 +684,8 @@ if __name__ == "__main__":
 
     rl_snake = RLSnake(initial_points=initial_snake, 
                        external_energy_fn=external_energy_fn,
-                       setting_fn=triangle_setting_fn,
-                       run_name="rl_snake_triangle_bc_30",
+                       setting_fn=test_eagle_image,
+                       run_name="rl_snake_eagle_bc_30",
                        update_freq=1,
                        save_freq=500,
                        alpha=5e-7,
@@ -683,6 +693,9 @@ if __name__ == "__main__":
                        model_type='mlp',
                        obs_type='com,roi')
     
+    rl_snake.evaluate_on_all_settings(checkpoint_path="runs/rl_snake_multicircle_ppo_30/models/snake_model_1500.pth",
+                                      num_steps=200)
+
     rl_snake.optimize(num_settings=3000)
 
 # if __name__ == "__main__":
@@ -691,7 +704,6 @@ if __name__ == "__main__":
 
 #     RL = True
 
-#     
     
 #     # dataset_setting_fn = build_dataset_setting_fn("./datasets/")
     
@@ -706,8 +718,8 @@ if __name__ == "__main__":
 #     if RL:
 #         rl_snake = RLSnake(initial_points=initial_snake, 
 #                        external_energy_fn=external_energy_fn,
-#                        setting_fn=triangle_setting_fn,
-#                        run_name="rl_snake_triangle_bc_30",
+#                        setting_fn=setting_fn,
+#                        run_name="rl_snake_multicircle_ppo_30",
 #                        update_freq=1,
 #                        save_freq=500,
 #                        alpha=5e-7,
@@ -715,7 +727,7 @@ if __name__ == "__main__":
 #                        model_type='mlp',
 #                        obs_type='com,roi')
 
-#         # rl_snake.optimize(num_settings=3000)
+#         rl_snake.optimize(num_settings=3000)
         
 #         # Example of how to evaluate a trained model
 #         # checkpoint_path = "runs/rl_snake_multicircle_bc_30/models/snake_model_2500.pth"
