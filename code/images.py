@@ -70,6 +70,10 @@ def get_image_setting_functions(img_height, img_width, exclude=None):
         )
         return img, None
 
+    # def test_eagle_image_fn():
+    #     img = np.array(Image.open("test_images/eagle.jpeg").convert("L"))
+    #     return img, None
+
     all_shapes = {
         "circle": circle_setting_fn,
         "multi_circle": multi_circle_setting_fn,
@@ -77,6 +81,7 @@ def get_image_setting_functions(img_height, img_width, exclude=None):
         "triangle": triangle_setting_fn,
         "star": star_setting_fn,
         "ellipse": ellipse_setting_fn,
+        # "test_eagle": test_eagle_image_fn,
     }
 
     return {name: fn for name, fn in all_shapes.items() if name not in exclude}
