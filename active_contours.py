@@ -24,6 +24,9 @@ from mask_utils import (
     create_multi_circle_mask,
     create_centered_rectangular_mask,
     create_circular_mask,
+    create_triangle_mask,
+    create_star_mask,
+    create_elliptical_mask,
 )
 from RL.ppo_trainer import PPOTrainer
 from RL.bc_trainer import BCTrainer
@@ -122,7 +125,6 @@ class RLSnake:
             new_snake_points = np.zeros_like(snake_points)
             new_snake_points[0, :] = np.linalg.solve(A_, y[0, :])
             new_snake_points[1, :] = np.linalg.solve(A_, y[1, :])
-
             return new_snake_points - snake_points
 
         self.trainer.set_gt_action_fn(gt_action_fn)
@@ -440,7 +442,41 @@ if __name__ == "__main__":
         )
         return img, None
 
-    # dataset_setting_fn = build_dataset_setting_fn("./datasets/")
+    def triangle_setting_fn():
+        img = create_triangle_mask(
+            img_height,
+            img_width,
+            center_x=img_width // 2,
+            center_y=img_height // 2,
+            base=img_width // 3,
+            triangle_height=img_height // 3,
+            orientation="up",
+        )
+        return img, None
+
+    def star_setting_fn():
+        img = create_star_mask(
+            img_height,
+            img_width,
+            center_x=img_width // 2,
+            center_y=img_height // 2,
+            outer_radius=img_width // 4,
+            inner_radius=img_width // 8,
+            num_points=5,
+        )
+        return img, None
+
+    def ellipse_setting_fn():
+        img = create_elliptical_mask(
+            img_height,
+            img_width,
+            center_x=img_width // 2,
+            center_y=img_height // 2,
+            radius_x=img_width // 3,
+            radius_y=img_height // 4,
+            rotation_angle_rad=0,
+        )
+        return img, None
 
     def external_energy_fn(img):
         return GradientExternalEnergy(img)
@@ -453,23 +489,34 @@ if __name__ == "__main__":
     )
 
     if RL:
-        rl_snake = RLSnake(
-            initial_points=initial_snake,
-            external_energy_fn=external_energy_fn,
-            setting_fn=circle_setting_fn,
-            run_name="rl_snake_overfit1_bc",
-            update_freq=1,
-            save_freq=100,
-            #  alpha=5e-7,
-            #  beta=1e-8,
-            alpha=1.0,
-            beta=0.05,
-            gamma=1.0,
-            model_type="mlp",
-            obs_type="com,roi",
-        )
+        shapes = {
+            "triangle": triangle_setting_fn,
+            "star": star_setting_fn,
+            "ellipse": ellipse_setting_fn,
+            "rectangle": rect_setting_fn,
+            "multi_circle": setting_fn,
+            "circle": circle_setting_fn,
+        }
 
-        rl_snake.optimize(num_settings=3000)
+        for shape_name, shape_fn in shapes.items():
+            # Create a unique run_name for each shape
+            current_run_name = f"mlp_bc_shape_{shape_name}"
+            rl_snake = RLSnake(
+                initial_points=initial_snake,
+                external_energy_fn=external_energy_fn,
+                setting_fn=shape_fn,
+                run_name="rl_snake_overfit1_bc",
+                update_freq=1,
+                save_freq=100,
+                alpha=5e-7,
+                beta=1e-8,
+                gamma=1.0,
+                model_type="mlp",
+                obs_type="com,roi",
+            )
+
+            rl_snake.optimize(num_settings=3000)
+            wandb.finish()
     else:
         img = circle_setting_fn()[0]
 

@@ -1,5 +1,8 @@
 import numpy as np
 import random
+import cv2
+import math
+
 
 def create_circular_mask(height, width, center_x=None, center_y=None, radius=None):
     if center_x is None:
@@ -10,9 +13,10 @@ def create_circular_mask(height, width, center_x=None, center_y=None, radius=Non
         radius = min(height, width) // 4
 
     Y, X = np.ogrid[:height, :width]
-    dist_from_center_sq = (X - center_x)**2 + (Y - center_y)**2
+    dist_from_center_sq = (X - center_x) ** 2 + (Y - center_y) ** 2
     mask = dist_from_center_sq <= radius**2
     return mask.astype(np.uint8) * 255
+
 
 def create_centered_rectangular_mask(height, width, rect_height=None, rect_width=None):
     """
@@ -21,9 +25,9 @@ def create_centered_rectangular_mask(height, width, rect_height=None, rect_width
     Args:
         height (int): Height of the mask.
         width (int): Width of the mask.
-        rect_height (int, optional): Height of the rectangle. 
+        rect_height (int, optional): Height of the rectangle.
                                      Defaults to height // 2.
-        rect_width (int, optional): Width of the rectangle. 
+        rect_width (int, optional): Width of the rectangle.
                                     Defaults to width // 2.
 
     Returns:
@@ -59,7 +63,7 @@ def create_centered_rectangular_mask(height, width, rect_height=None, rect_width
     # Set the rectangle area to 255 if the slice is valid
     if actual_start_x < actual_end_x and actual_start_y < actual_end_y:
         mask[actual_start_y:actual_end_y, actual_start_x:actual_end_x] = 255
-    
+
     return mask
 
 
@@ -89,7 +93,7 @@ def create_multi_circle_mask(height, width, num_circles, radius_range):
         # Constraint from image center (must be within X pixels of image center)
         cx_min_constrained_by_center = img_center_x - center_constraint_pixels
         cx_max_constrained_by_center = img_center_x + center_constraint_pixels
-        
+
         # Constraint from image boundaries (circle must be mostly within image)
         # random.randint's upper bound is inclusive.
         # So, center_x_max = width - radius - 1 means max x-coord of circle is (width - radius - 1) + radius = width - 1.
@@ -97,8 +101,12 @@ def create_multi_circle_mask(height, width, num_circles, radius_range):
         cx_max_constrained_by_boundary = width - radius - 1
 
         # Combined constraints for center_x
-        actual_cx_min = max(cx_min_constrained_by_boundary, cx_min_constrained_by_center)
-        actual_cx_max = min(cx_max_constrained_by_boundary, cx_max_constrained_by_center)
+        actual_cx_min = max(
+            cx_min_constrained_by_boundary, cx_min_constrained_by_center
+        )
+        actual_cx_max = min(
+            cx_max_constrained_by_boundary, cx_max_constrained_by_center
+        )
 
         # Determine bounds for center_y
         # Constraint from image center
@@ -108,10 +116,14 @@ def create_multi_circle_mask(height, width, num_circles, radius_range):
         # Constraint from image boundaries
         cy_min_constrained_by_boundary = radius
         cy_max_constrained_by_boundary = height - radius - 1
-        
+
         # Combined constraints for center_y
-        actual_cy_min = max(cy_min_constrained_by_boundary, cy_min_constrained_by_center)
-        actual_cy_max = min(cy_max_constrained_by_boundary, cy_max_constrained_by_center)
+        actual_cy_min = max(
+            cy_min_constrained_by_boundary, cy_min_constrained_by_center
+        )
+        actual_cy_max = min(
+            cy_max_constrained_by_boundary, cy_max_constrained_by_center
+        )
 
         # If the constraints make it impossible to place a circle,
         # random.randint will raise a ValueError if actual_min > actual_max.
@@ -125,10 +137,115 @@ def create_multi_circle_mask(height, width, num_circles, radius_range):
 
         center_x = random.randint(actual_cx_min, actual_cx_max)
         center_y = random.randint(actual_cy_min, actual_cy_max)
-        
+
         Y, X = np.ogrid[:height, :width]
-        dist_from_center_sq = (X - center_x)**2 + (Y - center_y)**2
+        dist_from_center_sq = (X - center_x) ** 2 + (Y - center_y) ** 2
         circle_mask = dist_from_center_sq <= radius**2
         final_mask = np.logical_or(final_mask, circle_mask)
-        
+
     return final_mask.astype(np.uint8) * 255
+
+
+def create_triangle_mask(
+    height,
+    width,
+    center_x=None,
+    center_y=None,
+    base=None,
+    triangle_height=None,
+    orientation="up",
+):
+    if center_x is None:
+        center_x = width // 2
+    if center_y is None:
+        center_y = height // 2
+    if base is None:
+        base = width // 4
+    if triangle_height is None:
+        triangle_height = height // 4
+
+    mask = np.zeros((height, width), dtype=np.uint8)
+
+    half_base = base // 2
+
+    if orientation == "up":
+        p1 = (center_x - half_base, center_y + triangle_height // 2)
+        p2 = (center_x + half_base, center_y + triangle_height // 2)
+        p3 = (center_x, center_y - triangle_height // 2)
+    else:  # 'down'
+        p1 = (center_x - half_base, center_y - triangle_height // 2)
+        p2 = (center_x + half_base, center_y - triangle_height // 2)
+        p3 = (center_x, center_y + triangle_height // 2)
+
+    vertices = np.array([p1, p2, p3], dtype=np.int32)
+    cv2.fillPoly(mask, [vertices], 255)
+    return mask
+
+
+def create_star_mask(
+    height,
+    width,
+    center_x=None,
+    center_y=None,
+    outer_radius=None,
+    inner_radius=None,
+    num_points=5,
+):
+    if center_x is None:
+        center_x = width // 2
+    if center_y is None:
+        center_y = height // 2
+    if outer_radius is None:
+        outer_radius = min(height, width) // 4
+    if inner_radius is None:
+        inner_radius = outer_radius // 2
+    if num_points < 2:
+        raise ValueError("num_points must be at least 2 for a star shape.")
+
+    mask = np.zeros((height, width), dtype=np.uint8)
+    points = []
+
+    for i in range(2 * num_points):
+        angle = math.pi * i / num_points
+        r = outer_radius if i % 2 == 0 else inner_radius
+        x = center_x + r * math.cos(angle - math.pi / 2)
+        y = center_y + r * math.sin(angle - math.pi / 2)
+        points.append([int(x), int(y)])
+
+    vertices = np.array(points, dtype=np.int32)
+    cv2.fillPoly(mask, [vertices], 255)
+    return mask
+
+
+def create_elliptical_mask(
+    height,
+    width,
+    center_x=None,
+    center_y=None,
+    radius_x=None,
+    radius_y=None,
+    rotation_angle_rad=0,
+):
+    if center_x is None:
+        center_x = width // 2
+    if center_y is None:
+        center_y = height // 2
+    if radius_x is None:
+        radius_x = min(height, width) // 4
+    if radius_y is None:
+        radius_y = min(height, width) // 4
+
+    Y, X = np.ogrid[:height, :width]
+
+    X_shifted = X - center_x
+    Y_shifted = Y - center_y
+
+    cos_phi = np.cos(rotation_angle_rad)
+    sin_phi = np.sin(rotation_angle_rad)
+
+    X_rotated = X_shifted * cos_phi + Y_shifted * sin_phi
+    Y_rotated = -X_shifted * sin_phi + Y_shifted * cos_phi
+
+    mask = (X_rotated / radius_x) ** 2 + (Y_rotated / radius_y) ** 2 <= 1
+
+    return mask.astype(np.uint8) * 255
