@@ -38,6 +38,7 @@ class RLSnake:
         external_energy_fn,
         setting_fn,
         run_name,
+        output_dir,
         update_freq=1,
         save_freq=20,
         alpha=0.01,
@@ -64,11 +65,12 @@ class RLSnake:
         self.image_channels = image_channels
         self.obs_type = obs_type
         self.trainer_algorithm = trainer_algorithm
+        self.output_dir = output_dir
 
         os.makedirs(f"runs/{run_name}/models", exist_ok=True)
         self.run = wandb.init(
             project="RLSnake",
-            name=run_name,
+            name=self.run_name,
             config={
                 "alpha": self.alpha,
                 "beta": self.beta,
@@ -233,8 +235,6 @@ class RLSnake:
     def run_setting(self, setting_fn, setting_idx, num_steps=200):
         img, gt_points = setting_fn()
 
-        wandb.log({"img": wandb.Image(img)}, step=setting_idx)
-
         self.curr_img = img
 
         def external_energy_fn(img):
@@ -322,16 +322,17 @@ class RLSnake:
 
         snake_fig = plot_snake_on_image(self.curr_img, self.current_points)
         wandb.log({"snake": snake_fig}, step=setting_idx)
-        plt.close(snake_fig)
 
         self.current_points = self.initial_points.copy()
 
-        return rewards, reward_by_time
+        return rewards, reward_by_time, snake_fig
 
     def optimize(self, num_settings=100, num_steps=200):
         avg_rewards_by_time = np.zeros(num_steps)
         for i in tqdm(range(num_settings)):
-            rewards, reward_by_time = self.run_setting(self.setting_fn, i, num_steps)
+            rewards, reward_by_time, snake_fig = self.run_setting(
+                self.setting_fn, i, num_steps
+            )
             wandb.log({"reward": np.mean(rewards), "final_reward": rewards[-1]}, step=i)
             avg_rewards_by_time += reward_by_time
 
@@ -339,25 +340,17 @@ class RLSnake:
                 bc_loss = self.trainer.update(self.last_value)
                 wandb.log({"bc_loss": bc_loss}, step=i)
             if i % self.save_freq == 0:
+                snake_fig.savefig(
+                    os.path.join(self.output_dir, f"training_iter_{i}.png"),
+                    dpi=150,
+                    bbox_inches="tight",
+                )
+                plt.close(snake_fig)
                 self.trainer.save(f"runs/{self.run_name}/models/rl_snake_model_{i}.pth")
-                table = wandb.Table(
-                    data=[
-                        [j, avg_rewards_by_time[j] / self.update_freq]
-                        for j in range(num_steps)
-                    ],
-                    columns=["step", "avg_reward_by_time"],
-                )
-                wandb.log(
-                    {
-                        f"avg_reward_by_time_{i}": wandb.plot.line(
-                            table,
-                            "step",
-                            "avg_reward_by_time",
-                            title=f"Avg Reward by Time {i}",
-                        )
-                    }
-                )
                 avg_rewards_by_time = np.zeros(num_steps)
+            else:
+                plt.close(snake_fig)
+        wandb.finish()
 
     def evaluate(
         self,
@@ -366,6 +359,7 @@ class RLSnake:
         num_episodes=1,
         num_steps=200,
         log_to_wandb=False,
+        shape_name="",
     ):
         """
         Evaluate the trained model from a checkpoint.
@@ -416,7 +410,7 @@ class RLSnake:
             external_energy_episode = []
 
             if log_to_wandb:
-                wandb.log({"eval_img": wandb.Image(img)}, step=episode)
+                wandb.log({f"{shape_name}_eval_img": wandb.Image(img)}, step=episode)
 
             # Run episode
             for step in range(num_steps):
@@ -470,17 +464,12 @@ class RLSnake:
 
             # Generate final snake image (for the last episode or if only 1 episode)
             if episode == num_episodes - 1:  # Save the final episode's image
-                snake_fig = plot_snake_on_image(self.curr_img, self.current_points)
-                final_snake_image = snake_fig
-
+                final_snake_image = plot_snake_on_image(
+                    self.curr_img, self.current_points
+                )
                 if log_to_wandb:
                     wandb.log(
-                        {
-                            "eval_snake": snake_fig,
-                            "eval_episode_reward": episode_reward,
-                            "eval_final_reward": reward,
-                            "eval_episode_length": step_count,
-                        },
+                        {f"{shape_name}_eval_snake": wandb.Image(final_snake_image)},
                         step=episode,
                     )
 
@@ -503,12 +492,24 @@ class RLSnake:
         if log_to_wandb:
             wandb.log(
                 {
-                    "eval_mean_episode_reward": eval_metrics["mean_episode_reward"],
-                    "eval_std_episode_reward": eval_metrics["std_episode_reward"],
-                    "eval_mean_final_reward": eval_metrics["mean_final_reward"],
-                    "eval_mean_episode_length": eval_metrics["mean_episode_length"],
-                    "eval_mean_internal_energy": eval_metrics["mean_internal_energy"],
-                    "eval_mean_external_energy": eval_metrics["mean_external_energy"],
+                    f"{shape_name}_eval_mean_episode_reward": eval_metrics[
+                        "mean_episode_reward"
+                    ],
+                    f"{shape_name}_eval_std_episode_reward": eval_metrics[
+                        "std_episode_reward"
+                    ],
+                    f"{shape_name}_eval_mean_final_reward": eval_metrics[
+                        "mean_final_reward"
+                    ],
+                    f"{shape_name}_eval_mean_episode_length": eval_metrics[
+                        "mean_episode_length"
+                    ],
+                    f"{shape_name}_eval_mean_internal_energy": eval_metrics[
+                        "mean_internal_energy"
+                    ],
+                    f"{shape_name}_eval_mean_external_energy": eval_metrics[
+                        "mean_external_energy"
+                    ],
                 }
             )
 
@@ -544,7 +545,6 @@ class RLSnake:
         Returns:
             dict: Dictionary with setting names as keys and evaluation results as values
         """
-        import os
 
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
@@ -560,6 +560,10 @@ class RLSnake:
         # Load the model once
         print(f"Loading model from checkpoint: {checkpoint_path}")
         self.trainer.load(checkpoint_path)
+        wandb.init(
+            project="RLSnake",
+            name=f"{self.run_name}_eval",
+        )
 
         # Evaluate on each setting
         for setting_name, setting_fn in rl_shapes_fn_dict.items():
@@ -570,7 +574,8 @@ class RLSnake:
                     setting_fn=setting_fn,
                     num_episodes=1,
                     num_steps=num_steps,
-                    log_to_wandb=log_to_wandb,
+                    log_to_wandb=True,
+                    shape_name=setting_name,
                 )
 
                 # Save the image
@@ -628,5 +633,6 @@ class RLSnake:
                         "metrics"
                     ]["mean_episode_length"]
             wandb.log(summary_metrics)
+            wandb.finish()
 
         return all_results

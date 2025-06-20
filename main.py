@@ -83,11 +83,9 @@ if __name__ == "__main__":
         "num_settings": 3001,
         "model_types": ["mlp", "cnn"],
         "obs_types": ["com", "roi"],  # "com", "roi", "trad"
-        "train_algorithms": ["bc", "ppo"],
+        "train_algorithms": ["ppo", "bc"],
         "output_dir": os.path.join(images_dir, "rl_snake"),
-        "shapes": get_image_setting_functions(
-            img_height, img_width, exclude=["circle", "multi_circle"]
-        ),
+        "shapes": get_image_setting_functions(img_height, img_width, exclude=[]),
     }
     for trainer in rl_snake_params["train_algorithms"]:
         for shape, shape_fn in rl_snake_params["shapes"].items():
@@ -99,12 +97,12 @@ if __name__ == "__main__":
                 return GradientExternalEnergy(img)
 
             current_run_name = f"{rl_snake_params["model_types"][0]}_{trainer}_{shape}"
-            output_dir = os.path.join(
+            current_output_dir = os.path.join(
                 rl_snake_params["output_dir"],
                 f"{current_run_name}",
             )
             os.makedirs(
-                output_dir,
+                current_output_dir,
                 exist_ok=True,
             )
             initial_snake = create_circle_points(
@@ -119,38 +117,39 @@ if __name__ == "__main__":
                 setting_fn=shape_fn,
                 run_name=current_run_name,
                 update_freq=1,
-                save_freq=500,
+                save_freq=1000,
                 alpha=rl_snake_params["alpha"],
                 beta=rl_snake_params["beta"],
                 gamma=rl_snake_params["gamma"],
                 model_type=rl_snake_params["model_types"][0],
                 obs_type=",".join(rl_snake_params["obs_types"]),
                 trainer_algorithm=trainer,
+                output_dir=current_output_dir,
             )
+            # Run RLSnake optimization
             rl_snake.optimize(num_settings=rl_snake_params["num_settings"])
-            wandb.finish()
-            # Example of how to evaluate a trained model
             checkpoint_path = f"runs/{current_run_name}/models/rl_snake_model_3000.pth"
-            eval_metrics, final_snake_image = rl_snake.evaluate(
-                checkpoint_path=checkpoint_path,
-                setting_fn=shape_fn,  # Can use a different setting function for evaluation
-                num_episodes=1,  # Default is now 1
-                num_steps=200,
-                log_to_wandb=False,
-            )
-            print("Evaluation Results:", eval_metrics)
-            final_snake_image.savefig(
-                os.path.join(output_dir, "1_setting_eval.png"),
-                dpi=150,
-                bbox_inches="tight",
-            )
+            # Example of how to evaluate a trained model
+            # eval_metrics, final_snake_image = rl_snake.evaluate(
+            #     checkpoint_path=checkpoint_path,
+            #     setting_fn=shape_fn,  # Can use a different setting function for evaluation
+            #     num_episodes=1,  # Default is now 1
+            #     num_steps=200,
+            #     log_to_wandb=True,
+            # )
+            # print("Evaluation Results:", eval_metrics)
+            # final_snake_image.savefig(
+            #     os.path.join(current_output_dir, "1_setting_eval.png"),
+            #     dpi=150,
+            #     bbox_inches="tight",
+            # )
 
             # Example of comprehensive evaluation on all settings
             results = rl_snake.evaluate_on_all_settings(
                 checkpoint_path=checkpoint_path,
-                output_dir=output_dir,
+                output_dir=current_output_dir,
                 num_steps=200,
-                log_to_wandb=False,
+                log_to_wandb=True,
             )
             print("Comprehensive evaluation completed!")
             print("Results:", results)
