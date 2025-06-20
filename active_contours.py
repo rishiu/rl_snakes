@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 from ext_energy.gradient_energy import GradientExternalEnergy
-
 # from data_utils import build_dataset_setting_fn
 from utils import (
     ma,
@@ -89,25 +88,20 @@ class RLSnake:
         )  # self.get_obs(self.obs_type).shape[0]
         self.output_dim = self.num_control_points * 2
 
-        # self.trainer = PPOTrainer(self.vector_input_dim, self.output_dim, \
-        #                           actor_lr=5e-5, critic_lr=5e-5, \
-        #                           gamma=0.99, K_epochs=self.update_freq, eps_clip=0.2, \
-        #                           action_std_init=0.1,
-        #                           model_type=self.model_type,
-        #                           image_channels=self.image_channels)
+        self.trainer = PPOTrainer(self.vector_input_dim, self.output_dim, \
+                                  actor_lr=5e-5, critic_lr=5e-5, \
+                                  gamma=0.99, K_epochs=self.update_freq, eps_clip=0.2, \
+                                  action_std_init=0.1,
+                                  model_type=self.model_type,
+                                  image_channels=self.image_channels)
 
-        self.trainer = BCTrainer(
-            self.vector_input_dim,
-            self.output_dim,
-            actor_lr=5e-5,
-            critic_lr=5e-5,
-            gamma=0.99,
-            K_epochs=self.update_freq,
-            eps_clip=0.2,
-            action_std_init=0.1,
-            model_type=self.model_type,
-            image_channels=self.image_channels,
-        )
+        # self.trainer = BCTrainer(self.vector_input_dim, self.output_dim, \
+        #                          actor_lr=5e-5, critic_lr=5e-5, \
+        #                          gamma=0.99, K_epochs=self.update_freq, eps_clip=0.2, \
+        #                          action_std_init=0.1,
+        #                          model_type=self.model_type,
+        #                          image_channels=self.image_channels)
+        
 
         A = Snake.setup_A(self.num_control_points, 0.05, 0.1)
         A_ = A + 1.0 * np.eye(self.num_control_points)
@@ -126,8 +120,8 @@ class RLSnake:
             new_snake_points[0, :] = np.linalg.solve(A_, y[0, :])
             new_snake_points[1, :] = np.linalg.solve(A_, y[1, :])
             return new_snake_points - snake_points
-
-        self.trainer.set_gt_action_fn(gt_action_fn)
+        
+        # self.trainer.set_gt_action_fn(gt_action_fn)
 
     def compute_internal_energy(self):
         temp_points = self.current_points.copy()
@@ -350,7 +344,300 @@ class RLSnake:
                 )
                 avg_rewards_by_time = np.zeros(num_steps)
 
+    def evaluate(self, checkpoint_path, setting_fn=None, num_episodes=1, num_steps=200, log_to_wandb=False):
+        """
+        Evaluate the trained model from a checkpoint.
+        
+        Args:
+            checkpoint_path (str): Path to the model checkpoint
+            setting_fn (callable, optional): Function to generate evaluation settings. If None, uses self.setting_fn
+            num_episodes (int): Number of evaluation episodes to run (default: 1)
+            num_steps (int): Maximum steps per episode
+            log_to_wandb (bool): Whether to log evaluation results to wandb
+            
+        Returns:
+            tuple: (eval_metrics dict, final_snake_image) where final_snake_image is the visualization of the final snake
+        """
+        # Load the model from checkpoint
+        print(f"Loading model from checkpoint: {checkpoint_path}")
+        self.trainer.load(checkpoint_path)
+        
+        # Use provided setting function or default to the instance's setting function
+        eval_setting_fn = setting_fn if setting_fn is not None else self.setting_fn
+        
+        # Store evaluation metrics
+        episode_rewards = []
+        final_rewards = []
+        episode_lengths = []
+        internal_energies = []
+        external_energies = []
+        final_snake_image = None
+        
+        print(f"Running evaluation for {num_episodes} episodes...")
+        
+        for episode in tqdm(range(num_episodes), desc="Evaluating"):
+            # Reset snake to initial position
+            self.current_points = self.initial_points.copy()
+            
+            # Get new setting
+            img, gt_points = eval_setting_fn()
+            self.curr_img = img
+            self.ext_energy = external_energy_fn(img)
+            
+            episode_reward = 0
+            step_count = 0
+            internal_energy_episode = []
+            external_energy_episode = []
+            
+            if log_to_wandb:
+                wandb.log({"eval_img": wandb.Image(img)}, step=episode)
+            
+            # Run episode
+            for step in range(num_steps):
+                obs = self.get_obs(self.obs_type)
+                offset = self.trainer.select_action(obs).reshape(2, self.num_control_points)
+                
+                self.current_points = self.current_points + offset 
+                self.current_points[0,:] = np.clip(self.current_points[0,:], 0, self.curr_img.shape[0] - 1)
+                self.current_points[1,:] = np.clip(self.current_points[1,:], 0, self.curr_img.shape[1] - 1)
+                
+                internal_energy = self.compute_internal_energy()
+                external_energy = self.compute_external_energy()
+                internal_energy_episode.append(internal_energy)
+                external_energy_episode.append(external_energy)
+                
+                # Calculate reward (same logic as in run_setting)
+                if gt_points is not None:
+                    reward = np.exp(-0.1 * np.mean(np.abs(self.current_points - gt_points))) + external_energy - internal_energy
+                else:
+                    reward = 0.1 * (external_energy + np.exp(-0.1 * internal_energy))
+                
+                episode_reward += reward
+                step_count += 1
+                
+                # Check termination conditions
+                if internal_energy > 0.1:
+                    break
+                elif np.abs(external_energy - internal_energy) < 1e-5:
+                    break
+                elif gt_points is not None and np.mean(np.abs(self.current_points - gt_points)) < 0.1:
+                    break
+            
+            episode_rewards.append(episode_reward)
+            final_rewards.append(reward)
+            episode_lengths.append(step_count)
+            internal_energies.extend(internal_energy_episode)
+            external_energies.extend(external_energy_episode)
+            
+            # Generate final snake image (for the last episode or if only 1 episode)
+            snake_fig = plot_snake_on_image(self.curr_img, self.current_points)
+            if episode == num_episodes - 1:  # Save the final episode's image
+                final_snake_image = snake_fig
+            
+            if log_to_wandb:
+                wandb.log({
+                    "eval_snake": snake_fig,
+                    "eval_episode_reward": episode_reward,
+                    "eval_final_reward": reward,
+                    "eval_episode_length": step_count
+                }, step=episode)
+            
+            # Only close the figure if it's not the final one we want to return
+            if episode != num_episodes - 1:
+                plt.close(snake_fig)
+        
+        # Calculate evaluation metrics
+        eval_metrics = {
+            "mean_episode_reward": np.mean(episode_rewards),
+            "std_episode_reward": np.std(episode_rewards),
+            "mean_final_reward": np.mean(final_rewards),
+            "std_final_reward": np.std(final_rewards),
+            "mean_episode_length": np.mean(episode_lengths),
+            "std_episode_length": np.std(episode_lengths),
+            "mean_internal_energy": np.mean(internal_energies),
+            "mean_external_energy": np.mean(external_energies),
+            "episode_rewards": episode_rewards,
+            "final_rewards": final_rewards,
+            "episode_lengths": episode_lengths
+        }
+        
+        # Log summary metrics
+        if log_to_wandb:
+            wandb.log({
+                "eval_mean_episode_reward": eval_metrics["mean_episode_reward"],
+                "eval_std_episode_reward": eval_metrics["std_episode_reward"],
+                "eval_mean_final_reward": eval_metrics["mean_final_reward"],
+                "eval_mean_episode_length": eval_metrics["mean_episode_length"],
+                "eval_mean_internal_energy": eval_metrics["mean_internal_energy"],
+                "eval_mean_external_energy": eval_metrics["mean_external_energy"]
+            })
+        
+        print(f"Evaluation completed!")
+        print(f"Mean episode reward: {eval_metrics['mean_episode_reward']:.4f} ± {eval_metrics['std_episode_reward']:.4f}")
+        print(f"Mean final reward: {eval_metrics['mean_final_reward']:.4f} ± {eval_metrics['std_final_reward']:.4f}")
+        print(f"Mean episode length: {eval_metrics['mean_episode_length']:.2f} ± {eval_metrics['std_episode_length']:.2f}")
+        
+        return eval_metrics, final_snake_image
 
+    def evaluate_on_all_settings(self, checkpoint_path, output_dir="output_ppo", num_steps=200, log_to_wandb=False):
+        """
+        Evaluate the trained model on all available setting functions and save results.
+        
+        Args:
+            checkpoint_path (str): Path to the model checkpoint
+            output_dir (str): Directory to save evaluation images (default: "output")
+            num_steps (int): Maximum steps per episode
+            log_to_wandb (bool): Whether to log evaluation results to wandb
+            
+        Returns:
+            dict: Dictionary with setting names as keys and evaluation results as values
+        """
+        import os
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Define all setting functions
+        img_height, img_width = 200, 200
+        
+        def rect_setting_fn():
+            img = create_centered_rectangular_mask(img_height, img_width, rect_height=img_height//4, rect_width=img_width//4)
+            return img, None
+        
+        def circle_setting_fn():
+            img = create_circular_mask(img_height, img_width, radius=img_width//4)
+            return img, None
+        
+        def multicircle_setting_fn():
+            img = create_multi_circle_mask(img_height, img_width, num_circles=5, radius_range=(10, 25))
+            return img, None
+        
+        def triangle_setting_fn():
+            img = create_triangle_mask(
+                img_height,
+                img_width,
+                center_x=img_width // 2,
+                center_y=img_height // 2,
+                base=img_width // 3,
+                triangle_height=img_height // 3,
+                orientation="up",
+            )
+            return img, None
+
+        def star_setting_fn():
+            img = create_star_mask(
+                img_height,
+                img_width,
+                center_x=img_width // 2,
+                center_y=img_height // 2,
+                outer_radius=img_width // 4,
+                inner_radius=img_width // 8,
+                num_points=5,
+            )
+            return img, None
+
+        def ellipse_setting_fn():
+            img = create_elliptical_mask(
+                img_height,
+                img_width,
+                center_x=img_width // 2,
+                center_y=img_height // 2,
+                radius_x=img_width // 3,
+                radius_y=img_height // 4,
+                rotation_angle_rad=0,
+            )
+            return img, None
+        
+        def test_eagle_image():
+            img = np.array(Image.open("test_images/eagle.jpeg").convert('L'))
+            return img, None
+        
+        # Dictionary of setting functions
+        setting_functions = {
+            "rectangle": rect_setting_fn,
+            "circle": circle_setting_fn,
+            "multicircle": multicircle_setting_fn,
+            "triangle": triangle_setting_fn,
+            "star": star_setting_fn,
+            "ellipse": ellipse_setting_fn,
+            "eagle": test_eagle_image
+        }
+        
+        print(f"Evaluating checkpoint: {checkpoint_path}")
+        print(f"Testing on {len(setting_functions)} different settings...")
+        print(f"Results will be saved to: {output_dir}/")
+        
+        # Store results
+        all_results = {}
+        
+        # Load the model once
+        print(f"Loading model from checkpoint: {checkpoint_path}")
+        self.trainer.load(checkpoint_path)
+        
+        # Evaluate on each setting
+        for setting_name, setting_fn in setting_functions.items():
+            print(f"\nEvaluating on {setting_name} setting...")
+            
+            try:
+                # Run evaluation
+                eval_metrics, final_snake_image = self.evaluate(
+                    checkpoint_path=checkpoint_path,
+                    setting_fn=setting_fn,
+                    num_episodes=1,
+                    num_steps=num_steps,
+                    log_to_wandb=log_to_wandb
+                )
+                
+                # Save the image
+                image_path = os.path.join(output_dir, f"{setting_name}_evaluation.png")
+                final_snake_image.savefig(image_path, dpi=150, bbox_inches='tight')
+                plt.close(final_snake_image)  # Close to free memory
+                
+                # Store results
+                all_results[setting_name] = {
+                    "metrics": eval_metrics,
+                    "image_path": image_path
+                }
+                
+                print(f"✓ {setting_name}: Reward={eval_metrics['mean_episode_reward']:.4f}, "
+                      f"Length={eval_metrics['mean_episode_length']:.1f} steps, "
+                      f"Image saved to {image_path}")
+                
+            except Exception as e:
+                print(f"✗ Failed to evaluate {setting_name}: {str(e)}")
+                all_results[setting_name] = {
+                    "metrics": None,
+                    "image_path": None,
+                    "error": str(e)
+                }
+        
+        # Print summary
+        print(f"\n{'='*60}")
+        print("EVALUATION SUMMARY")
+        print(f"{'='*60}")
+        print(f"{'Setting':<15} {'Reward':<10} {'Length':<10} {'Status':<15}")
+        print(f"{'-'*60}")
+        
+        for setting_name, result in all_results.items():
+            if result["metrics"] is not None:
+                reward = result["metrics"]["mean_episode_reward"]
+                length = result["metrics"]["mean_episode_length"]
+                status = "✓ Success"
+                print(f"{setting_name:<15} {reward:<10.4f} {length:<10.1f} {status:<15}")
+            else:
+                print(f"{setting_name:<15} {'N/A':<10} {'N/A':<10} {'✗ Failed':<15}")
+        
+        # Log summary to wandb if enabled
+        if log_to_wandb:
+            summary_metrics = {}
+            for setting_name, result in all_results.items():
+                if result["metrics"] is not None:
+                    summary_metrics[f"eval_all_{setting_name}_reward"] = result["metrics"]["mean_episode_reward"]
+                    summary_metrics[f"eval_all_{setting_name}_length"] = result["metrics"]["mean_episode_length"]
+            wandb.log(summary_metrics)
+        
+        print(f"\nAll evaluation images saved to: {output_dir}/")
+        return all_results
 class Snake:
     def __init__(
         self, initial_points, external_energy, alpha=0.01, beta=0.01, gamma=0.01
@@ -416,8 +703,151 @@ class Snake:
         self.current_points = snake_points.copy()
         return snake_evolution
 
+def rect_setting_fn():
+    img = create_centered_rectangular_mask(img_height, img_width, rect_height=img_height//4, rect_width=img_width//4)
+    return img, None
+
+def circle_setting_fn():
+    img = create_circular_mask(img_height, img_width, radius=img_width//4)
+    return img, None
+
+def setting_fn():
+    img = create_multi_circle_mask(img_height, img_width, num_circles=5, radius_range=(10, 25))
+    return img, None
+
+def triangle_setting_fn():
+    img = create_triangle_mask(
+        img_height,
+        img_width,
+        center_x=img_width // 2,
+        center_y=img_height // 2,
+        base=img_width // 3,
+        triangle_height=img_height // 3,
+        orientation="up",
+    )
+    return img, None
+
+def star_setting_fn():
+    img = create_star_mask(
+        img_height,
+        img_width,
+        center_x=img_width // 2,
+        center_y=img_height // 2,
+        outer_radius=img_width // 4,
+        inner_radius=img_width // 8,
+        num_points=5,
+    )
+    return img, None
+
+def ellipse_setting_fn():
+    img = create_elliptical_mask(
+        img_height,
+        img_width,
+        center_x=img_width // 2,
+        center_y=img_height // 2,
+        radius_x=img_width // 3,
+        radius_y=img_height // 4,
+        rotation_angle_rad=0,
+    )
+    return img, None
+
+def test_eagle_image():
+    img = np.array(Image.open("test_images/eagle.jpeg").convert('L'))
+    return img, None
 
 if __name__ == "__main__":
+    img = np.array(Image.open("test_images/eagle.jpeg").convert('L'))
+    img_height, img_width = img.shape
+    num_snake_points = 30
+    initial_snake = create_circle_points(num_snake_points, 
+                                         center_x=img_width//2, 
+                                         center_y=img_height//2, 
+                                         radius=img_width//3)
+
+    def external_energy_fn(img):
+        return GradientExternalEnergy(img)       
+
+    rl_snake = RLSnake(initial_points=initial_snake, 
+                       external_energy_fn=external_energy_fn,
+                       setting_fn=test_eagle_image,
+                       run_name="rl_snake_eagle_bc_30",
+                       update_freq=1,
+                       save_freq=500,
+                       alpha=5e-7,
+                       beta=1e-8,
+                       model_type='mlp',
+                       obs_type='com,roi')
+    
+    rl_snake.evaluate_on_all_settings(checkpoint_path="runs/rl_snake_multicircle_ppo_30/models/snake_model_1500.pth",
+                                      num_steps=200)
+
+    rl_snake.optimize(num_settings=3000)
+
+# if __name__ == "__main__":
+#     img_height, img_width = 200, 200
+#     num_snake_points = 30
+
+#     RL = True
+
+    
+#     # dataset_setting_fn = build_dataset_setting_fn("./datasets/")
+    
+#     def external_energy_fn(img):
+#         return GradientExternalEnergy(img)
+    
+#     initial_snake = create_circle_points(num_snake_points, 
+#                                          center_x=img_width//2, 
+#                                          center_y=img_height//2, 
+#                                          radius=img_width//3)
+    
+#     if RL:
+#         rl_snake = RLSnake(initial_points=initial_snake, 
+#                        external_energy_fn=external_energy_fn,
+#                        setting_fn=setting_fn,
+#                        run_name="rl_snake_multicircle_ppo_30",
+#                        update_freq=1,
+#                        save_freq=500,
+#                        alpha=5e-7,
+#                        beta=1e-8,
+#                        model_type='mlp',
+#                        obs_type='com,roi')
+
+#         rl_snake.optimize(num_settings=3000)
+        
+#         # Example of how to evaluate a trained model
+#         # checkpoint_path = "runs/rl_snake_multicircle_bc_30/models/snake_model_2500.pth"
+#         # eval_metrics, final_snake_image = rl_snake.evaluate(
+#         #     checkpoint_path=checkpoint_path,
+#         #     setting_fn=setting_fn,  # Can use a different setting function for evaluation
+#         #     num_episodes=1,  # Default is now 1
+#         #     num_steps=200,
+#         #     log_to_wandb=True
+#         # )
+#         # print("Evaluation Results:", eval_metrics)
+#         # final_snake_image.show()  # Display the final snake image
+        
+#         # Example of comprehensive evaluation on all settings
+#         # checkpoint_path = "runs/rl_snake_triangle_bc_30/models/snake_model_2500.pth"
+#         # results = rl_snake.evaluate_on_all_settings(
+#         #     checkpoint_path=checkpoint_path,
+#         #     output_dir="output/triangle_model_eval",
+#         #     num_steps=200,
+#         #     log_to_wandb=True
+#         # )
+#         # print("Comprehensive evaluation completed!")
+#         # print("Results:", results)
+#     else:
+#         img = circle_setting_fn()[0]
+
+#         snake = Snake(initial_points=initial_snake, 
+#                       external_energy=external_energy_fn(img),
+#                       alpha=1.0, 
+#                       beta=0.0,
+#                       gamma=1.0)
+#         snake_evolution = snake.optimize(num_iterations=1000)
+#         visualize_snake_evolution(img, snake_evolution, title="Active Contour Evolution")
+#     exit(0)
+
     img_height, img_width = 200, 200
     num_snake_points = 150
 
