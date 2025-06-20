@@ -533,7 +533,7 @@ class RLSnake:
     def evaluate_on_all_settings(
         self,
         checkpoint_path,
-        output_dir="output_ppo",
+        output_dir="output",
         num_steps=200,
         log_to_wandb=False,
     ):

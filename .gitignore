@@ -2,3 +2,4 @@
 wandb/
 runs/
 venv/
+images/** /*

@@ -83,8 +83,8 @@ if __name__ == "__main__":
         "gamma": 1.0,
         "num_settings": 1001,
         "model_types": ["mlp", "cnn"],
-        "obs_types": ["com", "roi"],
-        "train_algorithms": ["ppo", "bc"],
+        "obs_types": ["com", "roi"],  # "com", "roi", "trad"
+        "train_algorithms": ["bc", "ppo"],
         "output_dir": os.path.join(images_dir, "rl_snake"),
     }
     rl_shapes_fn_dict = get_image_setting_functions(img_height, img_width)
@@ -132,12 +132,21 @@ if __name__ == "__main__":
                 log_to_wandb=False,
             )
             print("Evaluation Results:", eval_metrics)
-            final_snake_image.show()  # Display the final snake image
+            final_snake_image.savefig(
+                os.path.join(
+                    rl_snake_params["output_dir"], f"{current_run_name}_training.png"
+                ),
+                dpi=150,
+                bbox_inches="tight",
+            )
 
             # Example of comprehensive evaluation on all settings
             results = rl_snake.evaluate_on_all_settings(
                 checkpoint_path=checkpoint_path,
-                output_dir="output/triangle_model_eval",
+                output_dir=os.path.join(
+                    rl_snake_params["output_dir"],
+                    f"{current_run_name}_evaluation",
+                ),
                 num_steps=200,
                 log_to_wandb=False,
             )
