@@ -18,7 +18,7 @@ def create_circular_mask(height, width, center_x=None, center_y=None, radius=Non
     return mask.astype(np.uint8) * 255
 
 
-def create_centered_rectangular_mask(height, width, rect_height=None, rect_width=None):
+def create_rectangular_mask(height, width, rect_height=None, rect_width=None):
     """
     Creates a mask with a centered rectangle.
 

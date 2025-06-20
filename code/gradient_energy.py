@@ -1,10 +1,11 @@
 import numpy as np
 from skimage.filters import sobel_h, sobel_v, gaussian
-from utils import bilinear_interpolate
+from code.utils import bilinear_interpolate
+
 
 class GradientExternalEnergy:
     def __init__(self, img):
-        self.image = img#gaussian(img, sigma=1, preserve_range=True, channel_axis=None if img.ndim == 2 else -1)
+        self.image = img  # gaussian(img, sigma=1, preserve_range=True, channel_axis=None if img.ndim == 2 else -1)
         self.img_height, self.img_width = self.image.shape[:2]
 
         # First order gradients from the original image
