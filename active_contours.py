@@ -433,12 +433,12 @@ if __name__ == "__main__":
         return img, None
 
     def circle_setting_fn():
-        img = create_circular_mask(img_height, img_width, radius=img_width // 4)
+        img = create_circular_mask(img_height, img_width, radius=img_width // 3)
         return img, None
 
     def setting_fn():
         img = create_multi_circle_mask(
-            img_height, img_width, num_circles=5, radius_range=(10, 25)
+            img_height, img_width, num_circles=5, radius_range=(10, 30)
         )
         return img, None
 
@@ -447,7 +447,7 @@ if __name__ == "__main__":
             img_height,
             img_width,
             center_x=img_width // 2,
-            center_y=img_height // 2,
+            center_y=img_height // 3,
             base=img_width // 3,
             triangle_height=img_height // 3,
             orientation="up",
@@ -459,7 +459,7 @@ if __name__ == "__main__":
             img_height,
             img_width,
             center_x=img_width // 2,
-            center_y=img_height // 2,
+            center_y=img_height // 3,
             outer_radius=img_width // 4,
             inner_radius=img_width // 8,
             num_points=5,
@@ -471,7 +471,7 @@ if __name__ == "__main__":
             img_height,
             img_width,
             center_x=img_width // 2,
-            center_y=img_height // 2,
+            center_y=img_height // 3,
             radius_x=img_width // 3,
             radius_y=img_height // 4,
             rotation_angle_rad=0,
@@ -490,12 +490,12 @@ if __name__ == "__main__":
 
     if RL:
         shapes = {
-            "triangle": triangle_setting_fn,
             "star": star_setting_fn,
             "ellipse": ellipse_setting_fn,
             "rectangle": rect_setting_fn,
             "multi_circle": setting_fn,
             "circle": circle_setting_fn,
+            "triangle": triangle_setting_fn,
         }
 
         for shape_name, shape_fn in shapes.items():
@@ -508,9 +508,9 @@ if __name__ == "__main__":
                 run_name="rl_snake_overfit1_bc",
                 update_freq=1,
                 save_freq=100,
-                alpha=5e-7,
-                beta=1e-8,
-                gamma=1.0,
+                alpha=5e-5,
+                beta=1e-6,
+                gamma=0.2,
                 model_type="mlp",
                 obs_type="com,roi",
             )
