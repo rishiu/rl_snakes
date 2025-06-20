@@ -613,6 +613,53 @@ class Snake:
         self.current_points = snake_points.copy()
         return snake_evolution
 
+def rect_setting_fn():
+    img = create_centered_rectangular_mask(img_height, img_width, rect_height=img_height//4, rect_width=img_width//4)
+    return img, None
+
+def circle_setting_fn():
+    img = create_circular_mask(img_height, img_width, radius=img_width//4)
+    return img, None
+
+def setting_fn():
+    img = create_multi_circle_mask(img_height, img_width, num_circles=5, radius_range=(10, 25))
+    return img, None
+
+def triangle_setting_fn():
+    img = create_triangle_mask(
+        img_height,
+        img_width,
+        center_x=img_width // 2,
+        center_y=img_height // 2,
+        base=img_width // 3,
+        triangle_height=img_height // 3,
+        orientation="up",
+    )
+    return img, None
+
+def star_setting_fn():
+    img = create_star_mask(
+        img_height,
+        img_width,
+        center_x=img_width // 2,
+        center_y=img_height // 2,
+        outer_radius=img_width // 4,
+        inner_radius=img_width // 8,
+        num_points=5,
+    )
+    return img, None
+
+def ellipse_setting_fn():
+    img = create_elliptical_mask(
+        img_height,
+        img_width,
+        center_x=img_width // 2,
+        center_y=img_height // 2,
+        radius_x=img_width // 3,
+        radius_y=img_height // 4,
+        rotation_angle_rad=0,
+    )
+    return img, None
 
 if __name__ == "__main__":
     img_height, img_width = 200, 200
@@ -621,6 +668,9 @@ if __name__ == "__main__":
                                          center_x=img_width//2, 
                                          center_y=img_height//2, 
                                          radius=img_width//3)
+
+    def external_energy_fn(img):
+        return GradientExternalEnergy(img)       
 
     rl_snake = RLSnake(initial_points=initial_snake, 
                        external_energy_fn=external_energy_fn,
@@ -641,53 +691,7 @@ if __name__ == "__main__":
 
 #     RL = True
 
-#     def rect_setting_fn():
-#         img = create_centered_rectangular_mask(img_height, img_width, rect_height=img_height//4, rect_width=img_width//4)
-#         return img, None
-    
-#     def circle_setting_fn():
-#         img = create_circular_mask(img_height, img_width, radius=img_width//4)
-#         return img, None
-    
-#     def setting_fn():
-#         img = create_multi_circle_mask(img_height, img_width, num_circles=5, radius_range=(10, 25))
-#         return img, None
-    
-#     def triangle_setting_fn():
-#         img = create_triangle_mask(
-#             img_height,
-#             img_width,
-#             center_x=img_width // 2,
-#             center_y=img_height // 2,
-#             base=img_width // 3,
-#             triangle_height=img_height // 3,
-#             orientation="up",
-#         )
-#         return img, None
-
-#     def star_setting_fn():
-#         img = create_star_mask(
-#             img_height,
-#             img_width,
-#             center_x=img_width // 2,
-#             center_y=img_height // 2,
-#             outer_radius=img_width // 4,
-#             inner_radius=img_width // 8,
-#             num_points=5,
-#         )
-#         return img, None
-
-#     def ellipse_setting_fn():
-#         img = create_elliptical_mask(
-#             img_height,
-#             img_width,
-#             center_x=img_width // 2,
-#             center_y=img_height // 2,
-#             radius_x=img_width // 3,
-#             radius_y=img_height // 4,
-#             rotation_angle_rad=0,
-#         )
-#         return img, None
+#     
     
 #     # dataset_setting_fn = build_dataset_setting_fn("./datasets/")
     
