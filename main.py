@@ -7,6 +7,7 @@ from code.visualization import (
     visualize_gradient_fields,
     visualize_snake_evolution,
 )
+from code.rl_snake import RLSnake
 
 import os
 import wandb
